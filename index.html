@@ -116,10 +116,11 @@
 
     <div id="game-container">
         <div id="level-display">Level 1</div>
-        <div id="maze-container"></div>
-        <div id="player"></div>
-        <div id="start-point"></div>
-        <div id="end-point"></div>
+        <div id="maze-container">
+            <div id="player"></div>
+            <div id="start-point"></div>
+            <div id="end-point"></div>
+        </div>
         
         <div id="controls">
             <button id="restart-button">Restart Level</button>
@@ -168,19 +169,30 @@
         // Maze levels - each level is an array of walls
         // Each wall is defined by [x, y, width, height]
         const levels = [
-            // Level 1 - Simple "S" shape maze (like in the screenshot)
+            // Level 1 - Simple rectangular maze (like in the screenshot)
             [
+                // Outer walls
                 [0, 0, config.mazeSize.width, config.wallThickness], // Top
                 [0, 0, config.wallThickness, config.mazeSize.height], // Left
                 [config.mazeSize.width - config.wallThickness, 0, config.wallThickness, config.mazeSize.height], // Right
                 [0, config.mazeSize.height - config.wallThickness, config.mazeSize.width, config.wallThickness], // Bottom
                 
-                // S-shaped path
-                [50, 100, 200, config.wallThickness], // Upper horizontal wall
-                [50, 100, config.wallThickness, 50], // Left vertical connector
-                [50, 150, 200, config.wallThickness], // Middle horizontal wall
-                [250, 150, config.wallThickness, 50], // Right vertical connector
-                [50, 200, 200, config.wallThickness] // Lower horizontal wall
+                // Square on left
+                [50, 50, 150, config.wallThickness], // Top
+                [50, 50, config.wallThickness, 150], // Left
+                [200, 50, config.wallThickness, 100], // Right
+                [50, 200, 150, config.wallThickness], // Bottom
+                
+                // Square on right
+                [250, 50, 100, config.wallThickness], // Top
+                [250, 50, config.wallThickness, 100], // Left
+                [350, 50, config.wallThickness, 150], // Right
+                [250, 150, 100, config.wallThickness], // Bottom
+                
+                // Bottom structure
+                [150, 250, 150, config.wallThickness], // Bottom horizontal
+                [150, 250, config.wallThickness, 50], // Left vertical
+                [300, 250, config.wallThickness, 50] // Right vertical
             ],
             // Level 2 - More complex maze
             [
@@ -218,13 +230,18 @@
 
         // Level start and end points [x, y]
         const levelPoints = [
-            { start: [150, 75], end: [150, 225] }, // For the S-shaped maze
+            { start: [25, 25], end: [375, 125] }, // For level 1
             { start: [25, 25], end: [275, 275] },
             { start: [25, 25], end: [275, 275] }
         ];
 
         // Initialize the game
         function initGame() {
+            // Make sure the player, start point and end point are inside the maze container
+            player.style.position = 'absolute';
+            startPoint.style.position = 'absolute';
+            endPoint.style.position = 'absolute';
+            
             resizeMaze();
             setupLevel(config.currentLevel);
             
@@ -338,6 +355,9 @@
         function setPoint(element, x, y) {
             element.style.left = `${x}px`;
             element.style.top = `${y}px`;
+            // Ensure the points are visible and properly positioned
+            element.style.position = 'absolute';
+            element.style.transform = 'translate(-50%, -50%)';
         }
 
         // Handle device orientation event
@@ -459,6 +479,7 @@
             // Apply the position to the DOM element
             player.style.left = `${playerState.x}px`;
             player.style.top = `${playerState.y}px`;
+            player.style.transform = 'translate(-50%, -50%)';
             
             // Check for win condition (reached end point)
             // Get the end point position directly from its style
