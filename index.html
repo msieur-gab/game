@@ -168,15 +168,19 @@
         // Maze levels - each level is an array of walls
         // Each wall is defined by [x, y, width, height]
         const levels = [
-            // Level 1 - Simple maze
+            // Level 1 - Simple "S" shape maze (like in the screenshot)
             [
                 [0, 0, config.mazeSize.width, config.wallThickness], // Top
                 [0, 0, config.wallThickness, config.mazeSize.height], // Left
                 [config.mazeSize.width - config.wallThickness, 0, config.wallThickness, config.mazeSize.height], // Right
                 [0, config.mazeSize.height - config.wallThickness, config.mazeSize.width, config.wallThickness], // Bottom
-                [50, 50, 200, config.wallThickness], // Horizontal wall
-                [150, 50, config.wallThickness, 150], // Vertical wall
-                [50, 200, 200, config.wallThickness] // Bottom horizontal wall
+                
+                // S-shaped path
+                [50, 100, 200, config.wallThickness], // Upper horizontal wall
+                [50, 100, config.wallThickness, 50], // Left vertical connector
+                [50, 150, 200, config.wallThickness], // Middle horizontal wall
+                [250, 150, config.wallThickness, 50], // Right vertical connector
+                [50, 200, 200, config.wallThickness] // Lower horizontal wall
             ],
             // Level 2 - More complex maze
             [
@@ -214,7 +218,7 @@
 
         // Level start and end points [x, y]
         const levelPoints = [
-            { start: [25, 25], end: [275, 275] },
+            { start: [150, 75], end: [150, 225] }, // For the S-shaped maze
             { start: [25, 25], end: [275, 275] },
             { start: [25, 25], end: [275, 275] }
         ];
@@ -397,15 +401,18 @@
             
             let collision = false;
             
+            // Log positions for debugging
+            console.log(`Player: x=${newX}, y=${newY}`);
+            
             walls.forEach(wall => {
-                const wallRect = wall.getBoundingClientRect();
-                const mazeRect = mazeContainer.getBoundingClientRect();
-                
-                // Adjust coordinates to be relative to maze container
-                const relWallLeft = wallRect.left - mazeRect.left;
-                const relWallTop = wallRect.top - mazeRect.top;
-                const relWallRight = relWallLeft + wallRect.width;
-                const relWallBottom = relWallTop + wallRect.height;
+                // Use direct wall positions instead of getBoundingClientRect
+                // This ensures the collision matches the visual walls
+                const wallLeft = parseFloat(wall.style.left);
+                const wallTop = parseFloat(wall.style.top);
+                const wallWidth = parseFloat(wall.style.width);
+                const wallHeight = parseFloat(wall.style.height);
+                const wallRight = wallLeft + wallWidth;
+                const wallBottom = wallTop + wallHeight;
                 
                 // Check for collision
                 if (newX + playerRadius > relWallLeft && 
@@ -417,10 +424,10 @@
                     
                     // Find closest edge to push back from
                     const edgeDistances = [
-                        { edge: 'left', dist: Math.abs(newX + playerRadius - relWallLeft) },
-                        { edge: 'right', dist: Math.abs(newX - playerRadius - relWallRight) },
-                        { edge: 'top', dist: Math.abs(newY + playerRadius - relWallTop) },
-                        { edge: 'bottom', dist: Math.abs(newY - playerRadius - relWallBottom) }
+                        { edge: 'left', dist: Math.abs(newX + playerRadius - wallLeft) },
+                        { edge: 'right', dist: Math.abs(newX - playerRadius - wallRight) },
+                        { edge: 'top', dist: Math.abs(newY + playerRadius - wallTop) },
+                        { edge: 'bottom', dist: Math.abs(newY - playerRadius - wallBottom) }
                     ];
                     
                     edgeDistances.sort((a, b) => a.dist - b.dist);
@@ -430,16 +437,16 @@
                     if (closestEdge === 'left' || closestEdge === 'right') {
                         playerState.vx = -playerState.vx * 0.5;
                         if (closestEdge === 'left') {
-                            newX = relWallLeft - playerRadius;
+                            newX = wallLeft - playerRadius;
                         } else {
-                            newX = relWallRight + playerRadius;
+                            newX = wallRight + playerRadius;
                         }
                     } else {
                         playerState.vy = -playerState.vy * 0.5;
                         if (closestEdge === 'top') {
-                            newY = relWallTop - playerRadius;
+                            newY = wallTop - playerRadius;
                         } else {
-                            newY = relWallBottom + playerRadius;
+                            newY = wallBottom + playerRadius;
                         }
                     }
                 }
@@ -454,14 +461,13 @@
             player.style.top = `${playerState.y}px`;
             
             // Check for win condition (reached end point)
-            const endPointRect = endPoint.getBoundingClientRect();
-            const mazeRect = mazeContainer.getBoundingClientRect();
-            const relEndX = endPointRect.left - mazeRect.left + 10; // +10 for center of endPoint
-            const relEndY = endPointRect.top - mazeRect.top + 10;
+            // Get the end point position directly from its style
+            const endPointX = parseFloat(endPoint.style.left);
+            const endPointY = parseFloat(endPoint.style.top);
             
             const distToEnd = Math.sqrt(
-                Math.pow(playerState.x - relEndX, 2) + 
-                Math.pow(playerState.y - relEndY, 2)
+                Math.pow(playerState.x - endPointX, 2) + 
+                Math.pow(playerState.y - endPointY, 2)
             );
             
             if (distToEnd < 15) { // Win if within 15px of end point
