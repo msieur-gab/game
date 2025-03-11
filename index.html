@@ -36,6 +36,7 @@
             border-radius: 50%;
             transform: translate(-50%, -50%);
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            z-index: 100; /* Make sure it's above other elements */
         }
         .wall {
             position: absolute;
@@ -47,14 +48,15 @@
             height: 20px;
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            z-index: 90; /* Make sure these are above walls but below player */
         }
         #start-point {
             background-color: green;
-            opacity: 0.5;
+            opacity: 0.8;
         }
         #end-point {
             background-color: blue;
-            opacity: 0.5;
+            opacity: 0.8;
         }
         #message {
             position: fixed;
@@ -167,32 +169,25 @@
         };
 
         // Maze levels - each level is an array of walls
-        // Each wall is defined by [x, y, width, height]
+        // Each wall is defined by [x, y, width, height] in percentage of maze size
         const levels = [
             // Level 1 - Simple rectangular maze (like in the screenshot)
             [
-                // Outer walls
+                // Outer walls - keep fixed values for borders
                 [0, 0, config.mazeSize.width, config.wallThickness], // Top
                 [0, 0, config.wallThickness, config.mazeSize.height], // Left
                 [config.mazeSize.width - config.wallThickness, 0, config.wallThickness, config.mazeSize.height], // Right
                 [0, config.mazeSize.height - config.wallThickness, config.mazeSize.width, config.wallThickness], // Bottom
                 
-                // Square on left
-                [50, 50, 150, config.wallThickness], // Top
-                [50, 50, config.wallThickness, 150], // Left
-                [200, 50, config.wallThickness, 100], // Right
-                [50, 200, 150, config.wallThickness], // Bottom
+                // Inside walls - calculated as percentages for responsiveness
+                [config.mazeSize.width * 0.15, config.mazeSize.height * 0.15, config.mazeSize.width * 0.35, config.wallThickness], // Top left horizontal
+                [config.mazeSize.width * 0.15, config.mazeSize.height * 0.15, config.wallThickness, config.mazeSize.height * 0.35], // Left vertical
+                [config.mazeSize.width * 0.15, config.mazeSize.height * 0.5, config.mazeSize.width * 0.35, config.wallThickness], // Bottom left horizontal
                 
-                // Square on right
-                [250, 50, 100, config.wallThickness], // Top
-                [250, 50, config.wallThickness, 100], // Left
-                [350, 50, config.wallThickness, 150], // Right
-                [250, 150, 100, config.wallThickness], // Bottom
-                
-                // Bottom structure
-                [150, 250, 150, config.wallThickness], // Bottom horizontal
-                [150, 250, config.wallThickness, 50], // Left vertical
-                [300, 250, config.wallThickness, 50] // Right vertical
+                [config.mazeSize.width * 0.5, config.mazeSize.height * 0.15, config.mazeSize.width * 0.35, config.wallThickness], // Top right horizontal
+                [config.mazeSize.width * 0.5, config.mazeSize.height * 0.15, config.wallThickness, config.mazeSize.height * 0.35], // Middle vertical
+                [config.mazeSize.width * 0.85, config.mazeSize.height * 0.15, config.wallThickness, config.mazeSize.height * 0.35], // Right vertical
+                [config.mazeSize.width * 0.5, config.mazeSize.height * 0.5, config.mazeSize.width * 0.35, config.wallThickness] // Bottom right horizontal
             ],
             // Level 2 - More complex maze
             [
@@ -230,9 +225,9 @@
 
         // Level start and end points [x, y]
         const levelPoints = [
-            { start: [25, 25], end: [375, 125] }, // For level 1
-            { start: [25, 25], end: [275, 275] },
-            { start: [25, 25], end: [275, 275] }
+            { start: [40, 40], end: [config.mazeSize.width - 40, 125] }, // For level 1
+            { start: [40, 40], end: [config.mazeSize.width - 40, config.mazeSize.height - 40] },
+            { start: [40, 40], end: [config.mazeSize.width - 40, config.mazeSize.height - 40] }
         ];
 
         // Initialize the game
@@ -289,13 +284,19 @@
             // Add device orientation event listener
             window.addEventListener('deviceorientation', handleOrientation);
             
+            // Ensure all elements are visible
+            player.style.display = 'block';
+            startPoint.style.display = 'block';
+            endPoint.style.display = 'block';
+            
             config.gameActive = true;
             gameLoop();
         }
 
         // Resize the maze based on window size
         function resizeMaze() {
-            const size = Math.min(window.innerWidth, window.innerHeight) * 0.8;
+            // Use 90% of the screen width for mobile optimization
+            const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.6);
             
             config.mazeSize = {
                 width: size,
@@ -316,25 +317,38 @@
             // Clear existing walls
             mazeContainer.innerHTML = '';
             
+            // Add back the player and points
+            mazeContainer.appendChild(player);
+            mazeContainer.appendChild(startPoint);
+            mazeContainer.appendChild(endPoint);
+            
             // Set level display
             levelDisplay.textContent = `Level ${level}`;
             
             // Get level index (0-based)
             const levelIndex = level - 1;
             
-            // Create walls for this level
+            // Create walls for this level - wall definitions might use percentages
             levels[levelIndex].forEach(wallDef => {
                 createWall(wallDef[0], wallDef[1], wallDef[2], wallDef[3]);
             });
             
-            // Set start and end points
+            // Set start and end points - update these based on current maze size
             const points = levelPoints[levelIndex];
-            setPoint(startPoint, points.start[0], points.start[1]);
-            setPoint(endPoint, points.end[0], points.end[1]);
+            
+            // Always ensure points are inside the maze boundary
+            const safeOffset = 40; // Keep points at least this far from edges
+            const startX = Math.min(Math.max(safeOffset, points.start[0]), config.mazeSize.width - safeOffset);
+            const startY = Math.min(Math.max(safeOffset, points.start[1]), config.mazeSize.height - safeOffset);
+            const endX = Math.min(Math.max(safeOffset, points.end[0]), config.mazeSize.width - safeOffset);
+            const endY = Math.min(Math.max(safeOffset, points.end[1]), config.mazeSize.height - safeOffset);
+            
+            setPoint(startPoint, startX, startY);
+            setPoint(endPoint, endX, endY);
             
             // Position the player at the start point
-            playerState.x = points.start[0];
-            playerState.y = points.start[1];
+            playerState.x = startX;
+            playerState.y = startY;
             playerState.vx = 0;
             playerState.vy = 0;
             updatePlayerPosition();
@@ -491,7 +505,8 @@
                 Math.pow(playerState.y - endPointY, 2)
             );
             
-            if (distToEnd < 15) { // Win if within 15px of end point
+            // Check for win condition (reached end point)
+            if (distToEnd < 20) { // Win if within 20px of end point
                 levelComplete();
             }
         }
@@ -517,9 +532,15 @@
             }
         }
 
-        // Restart current level
         function restartLevel() {
             setupLevel(config.currentLevel);
+            // Make sure the player is visible
+            player.style.display = 'block';
+            // Reset velocity
+            playerState.vx = 0;
+            playerState.vy = 0;
+            // Enable game
+            config.gameActive = true;
         }
 
         // Show a message for a duration
