@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Tilt Maze Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #maze-container {
+            position: relative;
+            border: 4px solid #333;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #player {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        .wall {
+            position: absolute;
+            background-color: #333;
+        }
+        #start-point, #end-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #start-point {
+            background-color: green;
+            opacity: 0.5;
+        }
+        #end-point {
+            background-color: blue;
+            opacity: 0.5;
+        }
+        #message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            display: none;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #level-display {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #permission-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="permission-overlay">
+        <h2>Tilt Maze Game</h2>
+        <p>This game requires access to your device's motion and orientation sensors.</p>
+        <button id="permission-button">Start Game</button>
+    </div>
+
+    <div id="game-container">
+        <div id="level-display">Level 1</div>
+        <div id="maze-container"></div>
+        <div id="player"></div>
+        <div id="start-point"></div>
+        <div id="end-point"></div>
+        
+        <div id="controls">
+            <button id="restart-button">Restart Level</button>
+            <button id="calibrate-button">Calibrate</button>
+        </div>
+    </div>
+
+    <div id="message"></div>
+
+    <script>
+        // Game configuration
+        const config = {
+            currentLevel: 1,
+            maxLevel: 3,
+            mazeSize: { width: 300, height: 300 },
+            playerRadius: 7.5,
+            wallThickness: 10,
+            gravity: 0.2,
+            friction: 0.95,
+            velocityLimit: 5,
+            calibrationOffsets: { beta: 0, gamma: 0 },
+            gameActive: false
+        };
+
+        // Game elements
+        const player = document.getElementById('player');
+        const mazeContainer = document.getElementById('maze-container');
+        const startPoint = document.getElementById('start-point');
+        const endPoint = document.getElementById('end-point');
+        const message = document.getElementById('message');
+        const levelDisplay = document.getElementById('level-display');
+        const permissionOverlay = document.getElementById('permission-overlay');
+        const permissionButton = document.getElementById('permission-button');
+        const restartButton = document.getElementById('restart-button');
+        const calibrateButton = document.getElementById('calibrate-button');
+
+        // Player state
+        let playerState = {
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            isMoving: false
+        };
+
+        // Maze levels - each level is an array of walls
+        // Each wall is defined by [x, y, width, height]
+        const levels = [
+            // Level 1 - Simple maze
+            [
+                [0, 0, config.mazeSize.width, config.wallThickness], // Top
+                [0, 0, config.wallThickness, config.mazeSize.height], // Left
+                [config.mazeSize.width - config.wallThickness, 0, config.wallThickness, config.mazeSize.height], // Right
+                [0, config.mazeSize.height - config.wallThickness, config.mazeSize.width, config.wallThickness], // Bottom
+                [50, 50, 200, config.wallThickness], // Horizontal wall
+                [150, 50, config.wallThickness, 150], // Vertical wall
+                [50, 200, 200, config.wallThickness] // Bottom horizontal wall
+            ],
+            // Level 2 - More complex maze
+            [
+                [0, 0, config.mazeSize.width, config.wallThickness], // Top
+                [0, 0, config.wallThickness, config.mazeSize.height], // Left
+                [config.mazeSize.width - config.wallThickness, 0, config.wallThickness, config.mazeSize.height], // Right
+                [0, config.mazeSize.height - config.wallThickness, config.mazeSize.width, config.wallThickness], // Bottom
+                [50, 50, 200, config.wallThickness], // Upper horizontal
+                [50, 50, config.wallThickness, 100], // Upper left vertical
+                [250, 50, config.wallThickness, 100], // Upper right vertical
+                [100, 150, 100, config.wallThickness], // Middle horizontal
+                [100, 150, config.wallThickness, 100], // Middle vertical
+                [50, 250, 200, config.wallThickness] // Bottom horizontal
+            ],
+            // Level 3 - Complex maze
+            [
+                [0, 0, config.mazeSize.width, config.wallThickness], // Top
+                [0, 0, config.wallThickness, config.mazeSize.height], // Left
+                [config.mazeSize.width - config.wallThickness, 0, config.wallThickness, config.mazeSize.height], // Right
+                [0, config.mazeSize.height - config.wallThickness, config.mazeSize.width, config.wallThickness], // Bottom
+                [50, 50, 75, config.wallThickness], // Upper left horizontal
+                [175, 50, 75, config.wallThickness], // Upper right horizontal
+                [50, 50, config.wallThickness, 75], // Upper left vertical
+                [250, 50, config.wallThickness, 75], // Upper right vertical
+                [125, 50, config.wallThickness, 125], // Upper middle vertical
+                [50, 125, 75, config.wallThickness], // Middle left horizontal
+                [175, 125, 75, config.wallThickness], // Middle right horizontal
+                [50, 200, config.wallThickness, 50], // Lower left vertical
+                [250, 200, config.wallThickness, 50], // Lower right vertical
+                [100, 200, 100, config.wallThickness], // Lower middle horizontal
+                [100, 200, config.wallThickness, 50], // Lower left middle vertical
+                [200, 200, config.wallThickness, 50] // Lower right middle vertical
+            ]
+        ];
+
+        // Level start and end points [x, y]
+        const levelPoints = [
+            { start: [25, 25], end: [275, 275] },
+            { start: [25, 25], end: [275, 275] },
+            { start: [25, 25], end: [275, 275] }
+        ];
+
+        // Initialize the game
+        function initGame() {
+            resizeMaze();
+            setupLevel(config.currentLevel);
+            
+            // Add event listeners for window resize
+            window.addEventListener('resize', resizeMaze);
+            
+            // Add button event listeners
+            restartButton.addEventListener('click', restartLevel);
+            calibrateButton.addEventListener('click', calibrateSensors);
+            permissionButton.addEventListener('click', requestPermissions);
+        }
+
+        // Request permissions for device motion and orientation
+        function requestPermissions() {
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                // iOS 13+ devices
+                DeviceMotionEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            return DeviceOrientationEvent.requestPermission();
+                        } else {
+                            throw new Error('Motion permission denied');
+                        }
+                    })
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            startGame();
+                        } else {
+                            throw new Error('Orientation permission denied');
+                        }
+                    })
+                    .catch(error => {
+                        alert('Permission error: ' + error.message);
+                    });
+            } else {
+                // Non-iOS or older iOS devices
+                startGame();
+            }
+        }
+
+        // Start the game after permissions
+        function startGame() {
+            permissionOverlay.style.display = 'none';
+            
+            // Add device orientation event listener
+            window.addEventListener('deviceorientation', handleOrientation);
+            
+            config.gameActive = true;
+            gameLoop();
+        }
+
+        // Resize the maze based on window size
+        function resizeMaze() {
+            const size = Math.min(window.innerWidth, window.innerHeight) * 0.8;
+            
+            config.mazeSize = {
+                width: size,
+                height: size
+            };
+            
+            mazeContainer.style.width = `${size}px`;
+            mazeContainer.style.height = `${size}px`;
+            
+            // Reposition everything for the new size
+            if (config.gameActive) {
+                setupLevel(config.currentLevel);
+            }
+        }
+
+        // Set up a specific level
+        function setupLevel(level) {
+            // Clear existing walls
+            mazeContainer.innerHTML = '';
+            
+            // Set level display
+            levelDisplay.textContent = `Level ${level}`;
+            
+            // Get level index (0-based)
+            const levelIndex = level - 1;
+            
+            // Create walls for this level
+            levels[levelIndex].forEach(wallDef => {
+                createWall(wallDef[0], wallDef[1], wallDef[2], wallDef[3]);
+            });
+            
+            // Set start and end points
+            const points = levelPoints[levelIndex];
+            setPoint(startPoint, points.start[0], points.start[1]);
+            setPoint(endPoint, points.end[0], points.end[1]);
+            
+            // Position the player at the start point
+            playerState.x = points.start[0];
+            playerState.y = points.start[1];
+            playerState.vx = 0;
+            playerState.vy = 0;
+            updatePlayerPosition();
+        }
+
+        // Create a wall element
+        function createWall(x, y, width, height) {
+            const wall = document.createElement('div');
+            wall.className = 'wall';
+            wall.style.left = `${x}px`;
+            wall.style.top = `${y}px`;
+            wall.style.width = `${width}px`;
+            wall.style.height = `${height}px`;
+            mazeContainer.appendChild(wall);
+        }
+
+        // Set a point (start or end)
+        function setPoint(element, x, y) {
+            element.style.left = `${x}px`;
+            element.style.top = `${y}px`;
+        }
+
+        // Handle device orientation event
+        function handleOrientation(event) {
+            if (!config.gameActive) return;
+            
+            // Get beta (x-axis) and gamma (y-axis) rotation
+            let beta = event.beta;  // -180 to 180 (front to back)
+            let gamma = event.gamma; // -90 to 90 (left to right)
+            
+            // Apply calibration offsets
+            beta -= config.calibrationOffsets.beta;
+            gamma -= config.calibrationOffsets.gamma;
+            
+            // Limit values to reasonable ranges
+            beta = Math.max(Math.min(beta, 45), -45);
+            gamma = Math.max(Math.min(gamma, 45), -45);
+            
+            // Apply gravity based on device orientation
+            playerState.vx += gamma * config.gravity;
+            playerState.vy += beta * config.gravity;
+            
+            // Limit velocity
+            playerState.vx = Math.max(Math.min(playerState.vx, config.velocityLimit), -config.velocityLimit);
+            playerState.vy = Math.max(Math.min(playerState.vy, config.velocityLimit), -config.velocityLimit);
+            
+            playerState.isMoving = true;
+        }
+
+        // Calibrate sensors to current orientation
+        function calibrateSensors() {
+            function handleCalibration(event) {
+                config.calibrationOffsets.beta = event.beta;
+                config.calibrationOffsets.gamma = event.gamma;
+                
+                window.removeEventListener('deviceorientation', handleCalibration);
+                
+                showMessage('Calibration complete! The device\'s current orientation is now considered level.', 2000);
+            }
+            
+            showMessage('Calibrating... Hold your device in your preferred playing position.', 1000);
+            
+            window.addEventListener('deviceorientation', handleCalibration, { once: true });
+        }
+
+        // Update player position based on velocity
+        function updatePlayerPosition() {
+            if (!playerState.isMoving) return;
+            
+            // Apply friction
+            playerState.vx *= config.friction;
+            playerState.vy *= config.friction;
+            
+            // Update position
+            let newX = playerState.x + playerState.vx;
+            let newY = playerState.y + playerState.vy;
+            
+            // Check for collisions with walls
+            const walls = document.querySelectorAll('.wall');
+            const playerRadius = config.playerRadius;
+            
+            let collision = false;
+            
+            walls.forEach(wall => {
+                const wallRect = wall.getBoundingClientRect();
+                const mazeRect = mazeContainer.getBoundingClientRect();
+                
+                // Adjust coordinates to be relative to maze container
+                const relWallLeft = wallRect.left - mazeRect.left;
+                const relWallTop = wallRect.top - mazeRect.top;
+                const relWallRight = relWallLeft + wallRect.width;
+                const relWallBottom = relWallTop + wallRect.height;
+                
+                // Check for collision
+                if (newX + playerRadius > relWallLeft && 
+                    newX - playerRadius < relWallRight && 
+                    newY + playerRadius > relWallTop && 
+                    newY - playerRadius < relWallBottom) {
+                    
+                    collision = true;
+                    
+                    // Find closest edge to push back from
+                    const edgeDistances = [
+                        { edge: 'left', dist: Math.abs(newX + playerRadius - relWallLeft) },
+                        { edge: 'right', dist: Math.abs(newX - playerRadius - relWallRight) },
+                        { edge: 'top', dist: Math.abs(newY + playerRadius - relWallTop) },
+                        { edge: 'bottom', dist: Math.abs(newY - playerRadius - relWallBottom) }
+                    ];
+                    
+                    edgeDistances.sort((a, b) => a.dist - b.dist);
+                    const closestEdge = edgeDistances[0].edge;
+                    
+                    // Bounce effect based on closest edge
+                    if (closestEdge === 'left' || closestEdge === 'right') {
+                        playerState.vx = -playerState.vx * 0.5;
+                        if (closestEdge === 'left') {
+                            newX = relWallLeft - playerRadius;
+                        } else {
+                            newX = relWallRight + playerRadius;
+                        }
+                    } else {
+                        playerState.vy = -playerState.vy * 0.5;
+                        if (closestEdge === 'top') {
+                            newY = relWallTop - playerRadius;
+                        } else {
+                            newY = relWallBottom + playerRadius;
+                        }
+                    }
+                }
+            });
+            
+            // Update player position
+            playerState.x = newX;
+            playerState.y = newY;
+            
+            // Apply the position to the DOM element
+            player.style.left = `${playerState.x}px`;
+            player.style.top = `${playerState.y}px`;
+            
+            // Check for win condition (reached end point)
+            const endPointRect = endPoint.getBoundingClientRect();
+            const mazeRect = mazeContainer.getBoundingClientRect();
+            const relEndX = endPointRect.left - mazeRect.left + 10; // +10 for center of endPoint
+            const relEndY = endPointRect.top - mazeRect.top + 10;
+            
+            const distToEnd = Math.sqrt(
+                Math.pow(playerState.x - relEndX, 2) + 
+                Math.pow(playerState.y - relEndY, 2)
+            );
+            
+            if (distToEnd < 15) { // Win if within 15px of end point
+                levelComplete();
+            }
+        }
+
+        // Level complete logic
+        function levelComplete() {
+            config.gameActive = false;
+            
+            if (config.currentLevel < config.maxLevel) {
+                // Next level
+                showMessage(`Level ${config.currentLevel} Complete! Starting next level...`, 2000, () => {
+                    config.currentLevel++;
+                    setupLevel(config.currentLevel);
+                    config.gameActive = true;
+                });
+            } else {
+                // Game complete
+                showMessage('Congratulations! You\'ve completed all levels!', 3000, () => {
+                    config.currentLevel = 1;
+                    setupLevel(config.currentLevel);
+                    config.gameActive = true;
+                });
+            }
+        }
+
+        // Restart current level
+        function restartLevel() {
+            setupLevel(config.currentLevel);
+        }
+
+        // Show a message for a duration
+        function showMessage(text, duration, callback) {
+            message.textContent = text;
+            message.style.display = 'block';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+                if (callback) callback();
+            }, duration);
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (config.gameActive) {
+                updatePlayerPosition();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize the game
+        initGame();
+    </script>
+</body>
+</html>
